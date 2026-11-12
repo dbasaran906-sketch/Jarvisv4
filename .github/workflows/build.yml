@@ -13,18 +13,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: ZIP'i ac
+      - name: Dosyalari Hazirla
         run: |
-          ZIP=$(git log --name-only --diff-filter=AM --pretty=format:"" -- "*.zip" | grep -v "^$" | head -n 1)
-          if [ -z "$ZIP" ]; then
-            ZIP=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
-          fi
-          echo "Kullanilan ZIP: $ZIP"
           mkdir -p proj
-          unzip -q "$ZIP" -d proj
+          ZIP=$(find . -maxdepth 3 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP" ]; then
+            echo "ZIP bulundu: $ZIP"
+            unzip -q "$ZIP" -d proj
+          else
+            echo "ZIP yok, dogrudan depo dosyalari kullaniliyor."
+            cp -r ./* proj/ 2>/dev/null || true
+          fi
           ls -la proj
 
       - uses: actions/setup-java@v4
@@ -44,6 +44,10 @@ jobs:
       - name: APK derle
         run: |
           PROJECT_DIR=$(find proj -name "settings.gradle*" -exec dirname {} \; | head -n 1)
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "HATA: Depoda Android proje dosyalari (settings.gradle) bulunamadi!"
+            exit 1
+          fi
           echo "Proje dizini: $PROJECT_DIR"
           cd "$PROJECT_DIR"
           gradle assembleDebug --no-daemon \
