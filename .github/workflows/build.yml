@@ -18,11 +18,14 @@ jobs:
 
       - name: ZIP'i ac
         run: |
-          ZIP=$(git log --name-only --diff-filter=AM --pretty=format: -- '*.zip' | grep -v '^$' | head -n 1)
+          ZIP=$(git log --name-only --diff-filter=AM --pretty=format:"" -- "*.zip" | grep -v "^$" | head -n 1)
+          if [ -z "$ZIP" ]; then
+            ZIP=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+          fi
           echo "Kullanilan ZIP: $ZIP"
-          mkdir proj
+          mkdir -p proj
           unzip -q "$ZIP" -d proj
-          ls proj
+          ls -la proj
 
       - uses: actions/setup-java@v4
         with:
@@ -32,23 +35,28 @@ jobs:
       - name: SDK lisanslari
         run: |
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
 
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
 
       - name: APK derle
-        working-directory: proj
-        run: >
-          gradle assembleRelease --no-daemon
-          -PversionCode=${{ github.run_number }}
-          -PrepoSlug=${{ github.repository }}
+        run: |
+          PROJECT_DIR=$(find proj -name "settings.gradle*" -exec dirname {} \; | head -n 1)
+          echo "Proje dizini: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          gradle assembleDebug --no-daemon \
+            -PversionCode=${{ github.run_number }} \
+            -PrepoSlug=${{ github.repository }}
 
       - name: Release olarak yayinla
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          APK_FILE=$(find proj -name "*.apk" | head -n 1)
+          echo "Bulunan APK: $APK_FILE"
+          cp "$APK_FILE" Jarvis.apk
           TAG="v1.0.${{ github.run_number }}"
-          cp proj/app/build/outputs/apk/release/app-release.apk Jarvis.apk
           gh release create "$TAG" Jarvis.apk --title "Jarvis $TAG" --notes "Jarvis $TAG" --latest
+          
